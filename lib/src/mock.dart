@@ -580,6 +580,38 @@ T typed<T>(ArgMatcher matcher, {String named}) {
   return null;
 }
 
+/// A forward-compatible argument matcher that matches any argument
+/// passed into the [named] named parameter.
+///
+/// This API will continue to be available in Mockito 3.0, using the Mockito 3.0
+/// mechanics. It is offered here so that users may migrate code like
+/// `when(obj.fn(foo: any))` to the Mockito 3.0 API,
+/// `when(obj.fn(foo: anyNamed('foo')))`, before actually bumping their
+/// dependency on Mockito.
+anyNamed(String named) => typed(any, named: named);
+
+/// A forward-compatible argument matcher that matches any argument
+/// passed into the [named] named parameter, and captures the argument for later
+/// access with `captured`.
+///
+/// This API will continue to be available in Mockito 3.0, using the Mockito 3.0
+/// mechanics. It is offered here so that users may migrate code like
+/// `when(obj.fn(foo: captureAny))` to the Mockito 3.0 API,
+/// `when(obj.fn(foo: captureAnyNamed('foo')))`, before actually bumping their
+/// dependency on Mockito.
+captureAnyNamed(String named) => typed(captureAny, named: named);
+
+/// An argument matcher that matches an argument against [matcher], and
+/// captures the argument for later access with `captured`.
+///
+/// This API will continue to be available in Mockito 3.0, using the Mockito 3.0
+/// mechanics. It is offered here so that users may migrate code like
+/// `when(obj.fn(foo: captureThat(equals(7)))` to a Mockito 3.0-compatible API,
+/// `when(obj.fn(foo: captureThatNamed(equals(7), named: 'foo'))`, before
+/// actually bumping their dependency on Mockito.
+captureThatNamed(Matcher matcher, {String named}) =>
+    typed(captureThat(matcher), named: named);
+
 class VerificationResult {
   List captured = [];
   int callCount;

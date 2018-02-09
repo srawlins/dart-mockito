@@ -28,6 +28,11 @@ export 'src/mock.dart'
         Expectation,
         PostExpectation,
 
+        // -- Mockito 3.0 compatibility
+        anyNamed,
+        captureAnyNamed,
+        captureThatNamed,
+
         // -- verification
         verify,
         verifyInOrder,
