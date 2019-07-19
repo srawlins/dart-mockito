@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import 'package:collection/collection.dart';
-import 'package:matcher/matcher.dart';
-import 'package:meta/meta.dart';
-import 'package:mockito/src/mock.dart';
+part of 'mock.dart';
 
 /// Returns a matcher that expects an invocation that matches arguments given.
 ///
@@ -168,12 +165,12 @@ class _MatcherEquality extends DeepCollectionEquality /* <Matcher | E> */ {
 
   @override
   bool equals(e1, e2) {
-    // All argument matches are wrapped in `ArgMatcher`, so we have to unwrap
-    // them into the raw `Matcher` type in order to finish our equality checks.
-    if (e1 is ArgMatcher) {
+    // All argument matches are wrapped in [_ArgMatcher], so we have to unwrap
+    // them into the raw [Matcher] type in order to finish our equality checks.
+    if (e1 is _ArgMatcher) {
       e1 = e1.matcher;
     }
-    if (e2 is ArgMatcher) {
+    if (e2 is _ArgMatcher) {
       e2 = e2.matcher;
     }
     if (e1 is Matcher && e2 is! Matcher) {

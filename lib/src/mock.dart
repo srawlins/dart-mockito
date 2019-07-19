@@ -14,14 +14,17 @@
 
 import 'dart:async';
 
+import 'package:collection/collection.dart';
+import 'package:matcher/matcher.dart';
 import 'package:meta/meta.dart';
 import 'package:mockito/src/call_pair.dart';
-import 'package:mockito/src/invocation_matcher.dart';
 import 'package:test_api/test_api.dart';
 // TODO(srawlins): Remove this when we no longer need to check for an
 // incompatiblity between test_api and test.
 // https://github.com/dart-lang/mockito/issues/175
 import 'package:test_api/src/backend/invoker.dart';
+
+part 'invocation_matcher.dart';
 
 bool _whenInProgress = false;
 bool _untilCalledInProgress = false;
@@ -31,8 +34,8 @@ _UntilCall _untilCall;
 final List<_VerifyCall> _verifyCalls = <_VerifyCall>[];
 final _TimeStampProvider _timer = _TimeStampProvider();
 final List _capturedArgs = [];
-final List<ArgMatcher> _storedArgs = <ArgMatcher>[];
-final Map<String, ArgMatcher> _storedNamedArgs = <String, ArgMatcher>{};
+final List<_ArgMatcher> _storedArgs = <_ArgMatcher>[];
+final Map<String, _ArgMatcher> _storedNamedArgs = <String, _ArgMatcher>{};
 
 // Hidden from the public API, used by spy.dart.
 void setDefaultResponse(Mock mock, CallPair<dynamic> defaultResponse()) {
@@ -207,7 +210,7 @@ abstract class Fake {
 
 typedef _ReturnsCannedResponse = CallPair<dynamic> Function();
 
-// When using an [ArgMatcher], we transform our invocation to have knowledge of
+// When using an [_ArgMatcher], we transform our invocation to have knowledge of
 // which arguments are wrapped, and which ones are not. Otherwise we just use
 // the existing invocation object.
 Invocation _useMatchedInvocationIfSet(Invocation invocation) {
@@ -236,7 +239,7 @@ class _InvocationForMatchedArguments extends Invocation {
   factory _InvocationForMatchedArguments(Invocation invocation) {
     if (_storedArgs.isEmpty && _storedNamedArgs.isEmpty) {
       throw StateError(
-          "_InvocationForMatchedArguments called when no ArgMatchers have been saved.");
+          "_InvocationForMatchedArguments called when no _ArgMatchers have been saved.");
     }
 
     // Handle named arguments first, so that we can provide useful errors for
@@ -274,12 +277,12 @@ class _InvocationForMatchedArguments extends Invocation {
       if (arg == null) {
         if (!_storedNamedArgSymbols.contains(name)) {
           // Either this is a parameter with default value `null`, or a `null`
-          // argument was passed, or an unnamed ArgMatcher was used. Just use
+          // argument was passed, or an unnamed [_ArgMatcher] was used. Just use
           // `null`.
           namedArguments[name] = null;
         }
       } else {
-        // Add each real named argument (not wrapped in an ArgMatcher).
+        // Add each real named argument (not wrapped in an [_ArgMatcher]).
         namedArguments[name] = arg;
       }
     });
@@ -320,9 +323,9 @@ class _InvocationForMatchedArguments extends Invocation {
     var nullPositionalArguments =
         invocation.positionalArguments.where((arg) => arg == null);
     if (_storedArgs.length > nullPositionalArguments.length) {
-      // More _positional_ ArgMatchers were stored than were actually passed as
+      // More _positional_ [_ArgMatcher]s were stored than were actually passed as
       // positional arguments. The only way this call was parsed and resolved is
-      // if an ArgMatcher was passed as a named argument, but without a name,
+      // if an [_ArgMatcher] was passed as a named argument, but without a name,
       // and thus stored in [_storedArgs], something like
       // `when(obj.fn(a: any))`.
       _storedArgs.clear();
@@ -339,12 +342,12 @@ class _InvocationForMatchedArguments extends Invocation {
         positionalIndex < invocation.positionalArguments.length) {
       var arg = _storedArgs[storedIndex];
       if (invocation.positionalArguments[positionalIndex] == null) {
-        // Add the [ArgMatcher] given to the argument matching helper.
+        // Add the [_ArgMatcher] given to the argument matching helper.
         positionalArguments.add(arg);
         storedIndex++;
         positionalIndex++;
       } else {
-        // An argument matching helper was not used; add the [ArgMatcher] from
+        // An argument matching helper was not used; add the [_ArgMatcher] from
         // [invocation].
         positionalArguments
             .add(invocation.positionalArguments[positionalIndex]);
@@ -352,7 +355,7 @@ class _InvocationForMatchedArguments extends Invocation {
       }
     }
     while (positionalIndex < invocation.positionalArguments.length) {
-      // Some trailing non-ArgMatcher arguments.
+      // Some trailing non-[_ArgMatcher] arguments.
       positionalArguments.add(invocation.positionalArguments[positionalIndex]);
       positionalIndex++;
     }
@@ -443,7 +446,7 @@ class InvocationMatcher {
     int index = 0;
     for (var roleArg in roleInvocation.positionalArguments) {
       var actArg = invocation.positionalArguments[index];
-      if (roleArg is ArgMatcher && roleArg._capture) {
+      if (roleArg is _ArgMatcher && roleArg._capture) {
         _capturedArgs.add(actArg);
       }
       index++;
@@ -451,8 +454,8 @@ class InvocationMatcher {
     for (var roleKey in roleInvocation.namedArguments.keys) {
       var roleArg = roleInvocation.namedArguments[roleKey];
       var actArg = invocation.namedArguments[roleKey];
-      if (roleArg is ArgMatcher) {
-        if (roleArg is ArgMatcher && roleArg._capture) {
+      if (roleArg is _ArgMatcher) {
+        if (roleArg is _ArgMatcher && roleArg._capture) {
           _capturedArgs.add(actArg);
         }
       }
@@ -493,7 +496,7 @@ class InvocationMatcher {
   }
 
   bool isMatchingArg(roleArg, actArg) {
-    if (roleArg is ArgMatcher) {
+    if (roleArg is _ArgMatcher) {
       return roleArg.matcher.matches(actArg, {});
     } else {
       return equals(roleArg).matches(actArg, {});
@@ -656,14 +659,27 @@ class _VerifyCall {
       'VerifyCall<mock: $mock, memberName: ${verifyInvocation.memberName}>';
 }
 
-class ArgMatcher {
+// An argument matcher that acts like an argument during stubbing or
+// verification, and stores "matching" information.
+//
+// Users do not need to construct this manually; users can instead use the
+// built-in values, [any], [anyNamed], [captureAny], [captureAnyNamed], or the
+// functions [argThat] and [captureThat].
+class _ArgMatcher {
   final Matcher matcher;
   final bool _capture;
 
-  ArgMatcher(this.matcher, this._capture);
+  _ArgMatcher(this.matcher, this._capture);
 
   @override
-  String toString() => '$ArgMatcher {$matcher: $_capture}';
+  String toString() => '$_ArgMatcher {$matcher: $_capture}';
+}
+
+@Deprecated(
+    'This class is not meant to be public. Use one of the built-in argument '
+    'matchers like `any`, `captureAny`, and `argThat`.')
+class ArgMatcher extends _ArgMatcher {
+  ArgMatcher(Matcher matcher, bool capture) : super(matcher, capture);
 }
 
 /// An argument matcher that matches any argument passed in "this" position.
@@ -699,7 +715,7 @@ Null typedCaptureThat(Matcher matcher, {String named}) =>
     captureThat(matcher, named: named);
 
 Null _registerMatcher(Matcher matcher, bool capture, {String named}) {
-  var argMatcher = ArgMatcher(matcher, capture);
+  var argMatcher = _ArgMatcher(matcher, capture);
   if (named == null) {
     _storedArgs.add(argMatcher);
   } else {

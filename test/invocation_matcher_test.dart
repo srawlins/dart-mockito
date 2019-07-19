@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import 'package:mockito/src/invocation_matcher.dart';
+import 'package:mockito/src/mock.dart';
 import 'package:test/test.dart';
 
 Invocation lastInvocation;
